@@ -10,13 +10,22 @@ async function waitHealth(port){ for(let i=0;i<50;i++){ try{ const x=await req(p
   // manifests
   let mp,pj,hj;
   try{ mp=JSON.parse(fs.readFileSync(path.join(ROOT,'.claude-plugin','marketplace.json'),'utf8')); pj=JSON.parse(fs.readFileSync(path.join(PLUGIN,'.claude-plugin','plugin.json'),'utf8')); hj=JSON.parse(fs.readFileSync(path.join(PLUGIN,'hooks','hooks.json'),'utf8')); check('manifests parse',true); }catch(e){ check('manifests parse',false,e.message); throw e; }
-  check('marketplace is devsnap with one devsnap plugin v0.1.0', mp.name==='devsnap'&&mp.plugins.length===1&&mp.plugins[0].name==='devsnap'&&mp.plugins[0].source==='./plugins/devsnap'&&mp.plugins[0].version==='0.1.0');
-  check('plugin.json is devsnap v0.1.0', pj.name==='devsnap'&&pj.version==='0.1.0');
+  check('marketplace is devsnap with one devsnap plugin v0.1.1', mp.name==='devsnap'&&mp.plugins.length===1&&mp.plugins[0].name==='devsnap'&&mp.plugins[0].source==='./plugins/devsnap'&&mp.plugins[0].version==='0.1.1');
+  check('plugin.json is devsnap v0.1.1', pj.name==='devsnap'&&pj.version==='0.1.1');
   const EVENTS=['SessionStart','UserPromptSubmit','Notification','PermissionRequest','Stop','SessionEnd'];
   check('hooks cover 6 events -> hook.js', EVENTS.every(ev=>{ const g=hj.hooks&&hj.hooks[ev]; return Array.isArray(g)&&g.some(x=>(x.hooks||[]).some(h=>h.command.includes('scripts/hook.js')&&h.command.includes(ev))); }));
   const hooksRaw=fs.readFileSync(path.join(PLUGIN,'hooks','hooks.json'),'utf8');
   check('hooks have no autostart', !hooksRaw.includes('autostart'));
   check('client copies identical', fs.readFileSync(path.join(ROOT,'client','index.html'),'utf8')===fs.readFileSync(path.join(PLUGIN,'client','index.html'),'utf8'));
+  const bridgeRaw=fs.readFileSync(path.join(PLUGIN,'scripts','bridge.js'),'utf8');
+  check('bridge defaults to live shared server', bridgeRaw.includes("DEFAULT_SERVER='https://devsnap-lozv.onrender.com'")&&bridgeRaw.includes("==='local'"));
+  // bridge /mode: default (shared) and DEVSNAP_SERVER=local (local store)
+  const BPORT=37800+(process.pid%150); const btmp=fs.mkdtempSync(path.join(os.tmpdir(),'devsnap-bridge-'));
+  const mkEnv=(extra)=>({...process.env,CLAUDE_PLUGIN_DATA:btmp,DEVSNAP_PORT:String(BPORT),...extra});
+  const bDef=spawn(process.execPath,[path.join(PLUGIN,'scripts','bridge.js')],{env:mkEnv({DEVSNAP_SERVER:''}),stdio:'ignore'});
+  try{ const up=await waitHealth(BPORT); const mode=await req(BPORT,'GET','/mode'); check('bridge default mode is shared live server', up&&mode.json&&mode.json.mode==='shared'&&mode.json.server==='https://devsnap-lozv.onrender.com'); } finally { bDef.kill('SIGTERM'); await sleep(300); }
+  const bLoc=spawn(process.execPath,[path.join(PLUGIN,'scripts','bridge.js')],{env:mkEnv({DEVSNAP_SERVER:'local'}),stdio:'ignore'});
+  try{ const up=await waitHealth(BPORT); const mode=await req(BPORT,'GET','/mode'); const feed=await req(BPORT,'GET','/api/feed'); check('bridge DEVSNAP_SERVER=local gives local store', up&&mode.json&&mode.json.mode==='local'&&mode.json.server===null&&Array.isArray(feed.json)&&feed.json.length===3); } finally { bLoc.kill('SIGTERM'); await sleep(300); try{ fs.rmSync(btmp,{recursive:true,force:true}); }catch(_){} }
   // server e2e on ephemeral port — use fixed high port derived from pid
   const PORT=37400+(process.pid%400);
   const tmpStore=path.join(ROOT,'server','stories.json'); const backup=fs.existsSync(tmpStore)?fs.readFileSync(tmpStore):null;

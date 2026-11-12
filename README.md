@@ -34,17 +34,25 @@ Local development without GitHub: `/plugin marketplace add ./path/to/devsnap-plu
 
 ## Local vs shared mode
 
-By default the bridge runs a **local-only** store: stories live in `<CLAUDE_PLUGIN_DATA or ~/.devsnap>/stories.json` and are only visible on your own machine.
+**By default the bridge connects to the public shared server** — a fresh install lands straight in the shared feed, no setup needed:
 
-To see **other devs'** stories, point the bridge at the shared server. The public shared server for this project is live on Render:
+- Shared server: https://devsnap-lozv.onrender.com (also usable directly in a browser — the server serves the same UI)
+- Everyone whose plugin points at the same server sees the same feed of stories from other devs.
+- Free-tier caveat: the server sleeps when idle, so the first request after a quiet period can take ~50s to wake it. If DevSnap looks empty or slow on first open, wait a moment and refresh.
+
+To use a **different** shared server (your own — see below), set:
 
 ```bash
-export DEVSNAP_SERVER=https://devsnap-lozv.onrender.com
+export DEVSNAP_SERVER=https://your-devsnap-server.example.com
 ```
 
-You can also just open https://devsnap-lozv.onrender.com in a browser — the server serves the same UI directly. Free-tier caveat: the server sleeps when idle, so the first request after a quiet period can take ~50s to wake it.
+To opt out of sharing entirely and run **local-only** (stories live in `<CLAUDE_PLUGIN_DATA or ~/.devsnap>/stories.json` and are only visible on your own machine):
 
-The bridge then proxies all `/api/*` calls to that server. Everyone whose bridge points at the same server sees the same feed. You can also run (or deploy) your own — see below.
+```bash
+export DEVSNAP_SERVER=local
+```
+
+Check which mode a running bridge is in at `GET /mode` on the bridge (e.g. http://127.0.0.1:37180/mode).
 
 ## Deploy the shared server (Render)
 
@@ -61,7 +69,7 @@ The bridge then proxies all `/api/*` calls to that server. Everyone whose bridge
 |---|---|---|---|
 | `DEVSNAP_PORT` | bridge / hook | `37180` | Preferred local bridge port (tries +1…+5 if busy) |
 | `DEVSNAP_NO_OPEN` | hook | unset | If set, `open` starts the bridge but never opens a browser |
-| `DEVSNAP_SERVER` | bridge | unset | URL of a shared server; enables shared mode |
+| `DEVSNAP_SERVER` | bridge | `https://devsnap-lozv.onrender.com` | Shared server URL; `local` (or `off`) = local-only mode, any other URL = that server |
 | `PORT` | shared server | `37181` | Port the shared server binds |
 
 ## Privacy & safety
