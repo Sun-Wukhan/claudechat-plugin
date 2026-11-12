@@ -36,13 +36,15 @@ Local development without GitHub: `/plugin marketplace add ./path/to/devsnap-plu
 
 By default the bridge runs a **local-only** store: stories live in `<CLAUDE_PLUGIN_DATA or ~/.devsnap>/stories.json` and are only visible on your own machine.
 
-To see **other devs'** stories, run (or deploy) the shared server and point the bridge at it:
+To see **other devs'** stories, point the bridge at the shared server. The public shared server for this project is live on Render:
 
 ```bash
-export DEVSNAP_SERVER=https://your-devsnap-server.example.com
+export DEVSNAP_SERVER=https://devsnap-lozv.onrender.com
 ```
 
-The bridge then proxies all `/api/*` calls to that server. Everyone whose bridge points at the same server sees the same feed.
+You can also just open https://devsnap-lozv.onrender.com in a browser — the server serves the same UI directly. Free-tier caveat: the server sleeps when idle, so the first request after a quiet period can take ~50s to wake it.
+
+The bridge then proxies all `/api/*` calls to that server. Everyone whose bridge points at the same server sees the same feed. You can also run (or deploy) your own — see below.
 
 ## Deploy the shared server (Render)
 
