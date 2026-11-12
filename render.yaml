@@ -11,7 +11,7 @@ services:
     name: devsnap
     env: node
     plan: free
-    buildCommand: echo "DevSnap: no build step (zero dependencies)"
+    buildCommand: 'echo "DevSnap - no build step (zero dependencies)"'
     startCommand: node server/server.js
     healthCheckPath: /health
     envVars:
