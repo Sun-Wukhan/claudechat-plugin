@@ -1,0 +1,19 @@
+# Render Blueprint — one free web service for the DevSnap shared stories server.
+# Render injects PORT automatically; server/server.js reads process.env.PORT
+# and binds 0.0.0.0. The server is zero-dependency, so there is no build step.
+# Players get: https://devsnap.onrender.com (or the URL Render assigns) —
+# GET / serves the DevSnap UI, /api/feed is the shared story feed.
+# Free plan caveat: the service sleeps when idle, so the first request after
+# a quiet period waits for a cold start. Stories are MVP file storage and
+# can be lost on redeploy/restart — acceptable for 24h ephemeral stories.
+services:
+  - type: web
+    name: devsnap
+    env: node
+    plan: free
+    buildCommand: echo "DevSnap: no build step (zero dependencies)"
+    startCommand: node server/server.js
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
