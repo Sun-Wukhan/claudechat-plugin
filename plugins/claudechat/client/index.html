@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ClaudeChat</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#0b0b0f;color:#fff;font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+.wrap{max-width:420px;margin:0 auto;padding:42px 14px 40px;min-height:100vh}
+header{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+h1{font-size:22px;margin:0}.pill{font-size:11px;padding:4px 8px;border-radius:999px;background:#26262e;color:#d4d4d8}
+.pill.busy{background:#1d4ed8}.pill.attention{background:#b91c1c}.pill.done{background:#15803d}
+.handlebar{display:flex;gap:8px;align-items:center;margin:8px 0 14px;color:#a1a1aa;font-size:13px}
+.handlebar input{background:#17171c;border:1px solid #2e2e38;color:#fff;border-radius:8px;padding:7px 9px;flex:1}
+button{background:#facc15;color:#111;border:0;border-radius:10px;padding:9px 14px;font-weight:700;cursor:pointer}
+button.ghost{background:#26262e;color:#fff;font-weight:600}
+.rings{display:flex;gap:14px;overflow-x:auto;padding:10px 2px 6px}
+.ring-item{display:flex;flex-direction:column;align-items:center;gap:6px;min-width:68px;cursor:pointer;background:none;color:#fff;padding:0}
+.ring{width:62px;height:62px;border-radius:50%;padding:3px;background:conic-gradient(#facc15,#ec4899,#8b5cf6,#facc15)}
+.ring.viewed{background:#3f3f46}
+.ring-inner{width:100%;height:100%;border-radius:50%;background:#17171c;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:18px;border:2px solid #0b0b0f}
+.ring-label{font-size:11px;color:#d4d4d8;max-width:68px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.warn{background:#451a03;border:1px solid #9a3412;color:#fed7aa;padding:9px 11px;border-radius:10px;font-size:12.5px;margin:14px 0}
+.composer{background:#141419;border:1px solid #26262e;border-radius:14px;padding:12px;margin-top:10px}
+.drop{border:1.5px dashed #3f3f46;border-radius:12px;padding:16px;text-align:center;color:#a1a1aa;cursor:pointer}
+.drop.over{border-color:#facc15;color:#fff}
+.drop img{max-width:100%;border-radius:8px}
+.row{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;align-items:center}
+.seg{display:flex;background:#26262e;border-radius:9px;overflow:hidden}
+.seg button{background:transparent;color:#a1a1aa;border-radius:0;padding:7px 10px;font-weight:600}
+.seg button.on{background:#facc15;color:#111}
+textarea,input[type=text]{width:100%;background:#0f0f13;border:1px solid #2e2e38;color:#fff;border-radius:9px;padding:9px;margin-top:10px}
+.counter{text-align:right;font-size:11px;color:#71717a}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}
+.card{background:#141419;border:1px solid #26262e;border-radius:12px;overflow:hidden;cursor:pointer}
+.thumb{height:110px;display:flex;align-items:center;justify-content:center;font-size:34px;background:#26262e}
+.thumb img{width:100%;height:100%;object-fit:cover}
+.card-body{padding:8px 10px}.card-body b{font-size:13px}.card-body p{margin:3px 0;color:#d4d4d8;font-size:12.5px}.meta{color:#71717a;font-size:11px}
+h2{font-size:15px;margin:22px 0 4px}
+.viewer{position:fixed;inset:0;background:rgba(0,0,0,.96);display:none;z-index:50;align-items:center;justify-content:center}
+.viewer.open{display:flex}
+.stage{position:relative;width:min(420px,100vw);height:min(746px,100vh);background:#111;border-radius:0;overflow:hidden}
+.stage img.bg{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.stage .gradbg{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:110px}
+.bars{position:absolute;top:10px;left:10px;right:10px;display:flex;gap:4px;z-index:3}
+.bar{flex:1;height:3px;background:rgba(255,255,255,.35);border-radius:2px;overflow:hidden}.bar i{display:block;height:100%;background:#fff;width:0}
+.vhead{position:absolute;top:20px;left:12px;right:12px;display:flex;justify-content:space-between;align-items:center;z-index:3;text-shadow:0 1px 4px #000}
+.vclose{background:rgba(0,0,0,.5);color:#fff;width:34px;height:34px;border-radius:50%;font-size:16px;padding:0}
+.vcap{position:absolute;left:12px;right:12px;bottom:52px;font-size:17px;font-weight:600;text-shadow:0 1px 6px #000;z-index:3}
+.vactions{position:absolute;right:12px;bottom:96px;z-index:3;display:flex;flex-direction:column;gap:10px}
+.heart{background:rgba(0,0,0,.5);color:#fff;width:44px;height:44px;border-radius:50%;font-size:20px;padding:0}.heart.liked{color:#f43f5e}
+.badge{background:rgba(0,0,0,.55);padding:3px 8px;border-radius:999px;font-size:11px}
+.tapzone{position:absolute;top:0;bottom:0;width:33%;z-index:2}.tapzone.l{left:0}.tapzone.r{right:0}
+</style></head><body>
+<div class="wrap">
+<header><h1>💬 ClaudeChat</h1><span id="claudePill" class="pill" style="display:none"></span></header>
+<div class="handlebar"><span>@</span><input id="handleInput" placeholder="your-handle" maxlength="24"><button id="saveHandle" class="ghost">Save</button></div>
+<div id="rings" class="rings"></div>
+<div class="warn">⚠️ Check your screenshot for secrets — .env, tokens, keys — before posting.</div>
+<div class="composer">
+<div id="drop" class="drop">Tap, drop, or paste (Ctrl+V) a screenshot / selfie<input id="file" type="file" accept="image/*" style="display:none"></div>
+<div class="row"><div class="seg" id="kindSeg"><button data-k="screenshot" class="on">Screenshot</button><button data-k="selfie">Selfie</button><button data-k="photo">Photo</button></div></div>
+<textarea id="caption" rows="2" maxlength="200" placeholder="Caption…"></textarea><div class="counter"><span id="ccount">0</span>/200</div>
+<div class="row"><button id="postBtn">Post story</button><button id="clearBtn" class="ghost">Clear</button></div>
+</div>
+<h2>Recent</h2><div id="grid" class="grid"></div>
+</div>
+<div id="viewer" class="viewer"><div class="stage" id="stage">
+<div class="bars" id="bars"></div>
+<div class="vhead"><span id="vhandle"></span><span><span id="vbadge" class="badge"></span> <button class="vclose" id="vclose">✕</button></span></div>
+<div class="tapzone l" id="tapL"></div><div class="tapzone r" id="tapR"></div>
+<div class="vactions"><button class="heart" id="heart">🤍</button></div>
+<div class="vcap" id="vcap"></div>
+</div></div>
+<script>
+'use strict';
+var handle=null, feedData=[], kind='screenshot', imageData=null, viewed={};
+try{ viewed=JSON.parse(localStorage.getItem('claudechat-viewed')||localStorage.getItem('devsnap-viewed')||'{}'); }catch(e){}
+function esc(s){ var d=document.createElement('div'); d.textContent=s==null?'':String(s); return d; }
+function txt(parent,tag,cls,text){ var el=document.createElement(tag); if(cls) el.className=cls; el.textContent=text==null?'':String(text); parent.appendChild(el); return el; }
+function timeAgo(iso){ var s=(Date.now()-new Date(iso).getTime())/1000; if(s<60) return 'now'; if(s<3600) return Math.floor(s/60)+'m'; if(s<86400) return Math.floor(s/3600)+'h'; return Math.floor(s/86400)+'d'; }
+function initials(h){ return (h||'?').replace(/[^a-zA-Z0-9]/g,'').slice(0,2).toUpperCase()||'?'; }
+function kindEmoji(k){ return k==='selfie'?'🤳':(k==='screenshot'?'💻':'📸'); }
+// identity: try /profile (bridge), fall back to localStorage
+function loadIdentity(){
+  fetch('/profile').then(function(r){ return r.ok?r.json():null; }).then(function(p){
+    if(p&&p.handle){ handle=p.handle; }
+    else { handle=localStorage.getItem('claudechat-handle')||localStorage.getItem('devsnap-handle'); }
+    if(handle) document.getElementById('handleInput').value=handle;
+    loadFeed();
+  }).catch(function(){ handle=localStorage.getItem('claudechat-handle')||localStorage.getItem('devsnap-handle'); if(handle) document.getElementById('handleInput').value=handle; loadFeed(); });
+}
+document.getElementById('saveHandle').addEventListener('click',function(){
+  var v=document.getElementById('handleInput').value.trim();
+  if(!/^[a-zA-Z0-9_.-]{1,24}$/.test(v)){ alert('Handle: 1-24 chars, letters/numbers/_ . - only'); return; }
+  handle=v; localStorage.setItem('claudechat-handle',v);
+  fetch('/profile',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({handle:v})}).catch(function(){});
+  loadFeed();
+});
+function loadFeed(){
+  fetch('/api/feed').then(function(r){ return r.json(); }).then(function(f){ feedData=f||[]; render(); }).catch(function(){});
+}
+function render(){
+  var rings=document.getElementById('rings'); rings.innerHTML='';
+  // Your story first
+  var mine=document.createElement('button'); mine.className='ring-item';
+  var r0=document.createElement('div'); r0.className='ring'; var ri=document.createElement('div'); ri.className='ring-inner'; ri.textContent='+'; r0.appendChild(ri); mine.appendChild(r0); txt(mine,'div','ring-label','Your story');
+  mine.addEventListener('click',function(){ document.getElementById('drop').scrollIntoView({behavior:'smooth'}); });
+  rings.appendChild(mine);
+  feedData.forEach(function(g,gi){
+    var allViewed=g.stories.every(function(s){ return viewed[s.id]; });
+    var b=document.createElement('button'); b.className='ring-item';
+    var r=document.createElement('div'); r.className='ring'+(allViewed?' viewed':''); if(g.avatarColor) r.style.background=''; 
+    var inner=document.createElement('div'); inner.className='ring-inner'; inner.textContent=initials(g.handle); if(g.avatarColor) inner.style.background=g.avatarColor; r.appendChild(inner); b.appendChild(r); txt(b,'div','ring-label',g.handle);
+    b.addEventListener('click',function(){ openViewer(gi,0); });
+    rings.appendChild(b);
+  });
+  var grid=document.getElementById('grid'); grid.innerHTML='';
+  var flat=[]; feedData.forEach(function(g,gi){ g.stories.forEach(function(s,si){ flat.push({s:s,gi:gi,si:si}); }); });
+  flat.sort(function(a,b){ return new Date(b.s.createdAt)-new Date(a.s.createdAt); });
+  flat.forEach(function(it){
+    var c=document.createElement('div'); c.className='card';
+    var th=document.createElement('div'); th.className='thumb'; if(it.s.gradient) th.style.background=it.s.gradient;
+    if(it.s.image){ var im=document.createElement('img'); im.src=it.s.image; im.alt=''; th.appendChild(im); } else { th.textContent=kindEmoji(it.s.kind); }
+    c.appendChild(th);
+    var body=document.createElement('div'); body.className='card-body'; txt(body,'b','',it.s.handle); txt(body,'p','',it.s.caption); txt(body,'div','meta',timeAgo(it.s.createdAt)+' ago · '+(it.s.views||0)+' views');
+    c.appendChild(body); c.addEventListener('click',function(){ openViewer(it.gi,it.si); }); grid.appendChild(c);
+  });
+}
+// composer
+var drop=document.getElementById('drop'), file=document.getElementById('file');
+drop.addEventListener('click',function(){ file.click(); });
+drop.addEventListener('dragover',function(e){ e.preventDefault(); drop.classList.add('over'); });
+drop.addEventListener('dragleave',function(){ drop.classList.remove('over'); });
+drop.addEventListener('drop',function(e){ e.preventDefault(); drop.classList.remove('over'); if(e.dataTransfer.files[0]) readFile(e.dataTransfer.files[0]); });
+file.addEventListener('change',function(){ if(file.files[0]) readFile(file.files[0]); });
+document.addEventListener('paste',function(e){ var items=(e.clipboardData||{}).items||[]; for(var i=0;i<items.length;i++){ if(items[i].type.indexOf('image')===0){ readFile(items[i].getAsFile()); break; } } });
+function showPreview(){ var olds=drop.querySelectorAll('img'); for(var i=0;i<olds.length;i++) olds[i].remove(); var im=document.createElement('img'); im.src=imageData; drop.appendChild(im); }
+function readRawFallback(f){ var r=new FileReader(); r.onload=function(){ imageData=r.result; showPreview(); }; r.readAsDataURL(f); }
+function readFile(f){ // Downscale + JPEG-compress before upload: full-res phone photos are several MB and were rejected uncompressed.
+  if(!f) return;
+  var url; try{ url=URL.createObjectURL(f); }catch(e){ readRawFallback(f); return; }
+  var img=new Image();
+  img.onload=function(){ try{ var MAX=1600; var w=img.naturalWidth||1600, h=img.naturalHeight||1200; var sc=Math.min(1,MAX/Math.max(w,h)); var cv=document.createElement('canvas'); cv.width=Math.max(1,Math.round(w*sc)); cv.height=Math.max(1,Math.round(h*sc)); cv.getContext('2d').drawImage(img,0,0,cv.width,cv.height); imageData=cv.toDataURL('image/jpeg',0.85); URL.revokeObjectURL(url); showPreview(); }catch(e){ URL.revokeObjectURL(url); readRawFallback(f); } };
+  img.onerror=function(){ URL.revokeObjectURL(url); readRawFallback(f); };
+  img.src=url;
+}
+document.getElementById('kindSeg').addEventListener('click',function(e){ if(e.target.dataset&&e.target.dataset.k){ kind=e.target.dataset.k; var bs=this.querySelectorAll('button'); for(var i=0;i<bs.length;i++) bs[i].classList.toggle('on',bs[i]===e.target); } });
+document.getElementById('caption').addEventListener('input',function(){ document.getElementById('ccount').textContent=this.value.length; });
+document.getElementById('clearBtn').addEventListener('click',function(){ imageData=null; document.getElementById('caption').value=''; location.reload(); });
+var claudeStatusCache=null;
+fetch('/status').then(function(r){ return r.ok?r.json():null; }).then(function(s){ if(s) claudeStatusCache=s.agent; }).catch(function(){});
+document.getElementById('postBtn').addEventListener('click',function(){
+  if(!handle){ alert('Set your handle first (the @ field at the top), then post.'); return; }
+  var btn=this; if(btn.disabled) return; btn.disabled=true; var oldLabel=btn.textContent; btn.textContent='Posting…';
+  var cap=document.getElementById('caption').value.slice(0,200);
+  fetch('/api/stories',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({handle:handle,caption:cap,kind:kind,image:imageData,claudeStatus:claudeStatusCache})}).then(function(r){ return r.text().then(function(t){ var j=null; try{ j=JSON.parse(t); }catch(e){} if(!r.ok) throw new Error((j&&j.error)||('HTTP '+r.status)); return j; }); }).then(function(){ imageData=null; document.getElementById('caption').value=''; document.getElementById('ccount').textContent='0'; var olds=drop.querySelectorAll('img'); for(var i=0;i<olds.length;i++) olds[i].remove(); loadFeed(); }).catch(function(e){ alert('Post failed: '+e.message); }).then(function(){ btn.disabled=false; btn.textContent=oldLabel; });
+});
+// viewer
+var vGroup=null, vIdx=0, vTimer=null, liked={};
+function openViewer(gi,si){ vGroup=feedData[gi]; if(!vGroup) return; vIdx=si||0; document.getElementById('viewer').classList.add('open'); showStory(); }
+function closeViewer(){ document.getElementById('viewer').classList.remove('open'); if(vTimer) clearTimeout(vTimer); }
+function showStory(){
+  if(!vGroup) return; if(vIdx>=vGroup.stories.length){ closeViewer(); return; } if(vIdx<0) vIdx=0;
+  var s=vGroup.stories[vIdx]; var stage=document.getElementById('stage');
+  var old=stage.querySelectorAll('img.bg,.gradbg'); for(var i=0;i<old.length;i++) old[i].remove();
+  if(s.image){ var im=document.createElement('img'); im.className='bg'; im.src=s.image; stage.insertBefore(im,stage.firstChild); }
+  else { var g=document.createElement('div'); g.className='gradbg'; if(s.gradient) g.style.background=s.gradient; g.textContent=kindEmoji(s.kind); stage.insertBefore(g,stage.firstChild); }
+  document.getElementById('vhandle').textContent='@'+s.handle+' · '+timeAgo(s.createdAt);
+  document.getElementById('vcap').textContent=s.caption||'';
+  document.getElementById('vbadge').textContent=s.claudeStatus?('Claude: '+s.claudeStatus):'';
+  document.getElementById('heart').textContent=liked[s.id]?'❤️':'🤍'; document.getElementById('heart').classList.toggle('liked',!!liked[s.id]);
+  var bars=document.getElementById('bars'); bars.innerHTML='';
+  vGroup.stories.forEach(function(_,i){ var b=document.createElement('div'); b.className='bar'; var fill=document.createElement('i'); fill.style.width=i<vIdx?'100%':(i===vIdx?'0%':'0%'); b.appendChild(fill); bars.appendChild(b); if(i===vIdx){ fill.style.transition='width 5s linear'; requestAnimationFrame(function(){ fill.style.width='100%'; }); } });
+  viewed[s.id]=true; try{ localStorage.setItem('claudechat-viewed',JSON.stringify(viewed)); }catch(e){}
+  if(handle) fetch('/api/stories/'+s.id+'/view',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({handle:handle})}).catch(function(){});
+  if(vTimer) clearTimeout(vTimer); vTimer=setTimeout(function(){ vIdx++; showStory(); },5000);
+  renderRingsOnly();
+}
+function renderRingsOnly(){ /* lightweight: re-render grid/rings without closing viewer */ var wasOpen=document.getElementById('viewer').classList.contains('open'); render(); if(wasOpen) document.getElementById('viewer').classList.add('open'); }
+document.getElementById('vclose').addEventListener('click',closeViewer);
+document.getElementById('tapL').addEventListener('click',function(){ vIdx--; showStory(); });
+document.getElementById('tapR').addEventListener('click',function(){ vIdx++; showStory(); });
+document.getElementById('heart').addEventListener('click',function(){ if(!vGroup) return; var s=vGroup.stories[vIdx]; liked[s.id]=!liked[s.id]; this.textContent=liked[s.id]?'❤️':'🤍'; this.classList.toggle('liked',!!liked[s.id]); });
+document.addEventListener('keydown',function(e){ if(e.key==='Escape') closeViewer(); });
+// status pill
+function pollStatus(){ fetch('/status',{cache:'no-store'}).then(function(r){ if(!r.ok) throw 0; return r.json(); }).then(function(s){ var p=document.getElementById('claudePill'); p.style.display=''; p.className='pill '+(s.agent||''); p.textContent='Claude: '+(s.agent||'idle'); claudeStatusCache=s.agent; }).catch(function(){ document.getElementById('claudePill').style.display='none'; }); }
+setInterval(pollStatus,1000); pollStatus();
+loadIdentity(); setInterval(loadFeed,15000);
+</script></body></html>

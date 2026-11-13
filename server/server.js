@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 'use strict';
-/* DevSnap shared stories server — zero-dependency Node http.
+/* ClaudeChat shared stories server — zero-dependency Node http.
  * Binds 0.0.0.0, PORT env (default 37181).
  * MVP storage: in-memory store persisted best-effort to stories.json next to this file.
  */
@@ -18,11 +18,11 @@ function seed(){
   if(stories.length) return;
   const now=Date.now();
   const seeds=[
-    {handle:'demo_maya',caption:'Pairing on a gnarly refactor — Claude is cooking',kind:'screenshot',gradient:'linear-gradient(135deg,#f59e0b,#ec4899)',hoursAgo:2,claudeStatus:'busy'},
-    {handle:'demo_kenji',caption:'Desk setup while the tests run green',kind:'photo',gradient:'linear-gradient(135deg,#06b6d4,#3b82f6)',hoursAgo:5,claudeStatus:'busy'},
-    {handle:'demo_sofia',caption:'Shipped it! Post-merge selfie',kind:'selfie',gradient:'linear-gradient(135deg,#8b5cf6,#ec4899)',hoursAgo:9,claudeStatus:'done'},
+    {handle:'demo_maya',caption:'Pairing on a gnarly refactor — Claude is cooking',kind:'screenshot',gradient:'linear-gradient(135deg,#f59e0b,#ec4899)',minutesAgo:20,claudeStatus:'busy'},
+    {handle:'demo_kenji',caption:'Desk setup while the tests run green',kind:'photo',gradient:'linear-gradient(135deg,#06b6d4,#3b82f6)',minutesAgo:55,claudeStatus:'busy'},
+    {handle:'demo_sofia',caption:'Shipped it! Post-merge selfie',kind:'selfie',gradient:'linear-gradient(135deg,#8b5cf6,#ec4899)',minutesAgo:100,claudeStatus:'done'},
   ];
-  for(const s of seeds){ const created=new Date(now - s.hoursAgo*3600*1000); stories.push({id:crypto.randomBytes(8).toString('hex'),handle:s.handle,caption:s.caption,kind:s.kind,image:null,gradient:s.gradient,createdAt:created.toISOString(),expiresAt:new Date(created.getTime()+24*3600*1000).toISOString(),claudeStatus:s.claudeStatus,views:0,demo:true}); }
+  for(const s of seeds){ const created=new Date(now - s.minutesAgo*60*1000); stories.push({id:crypto.randomBytes(8).toString('hex'),handle:s.handle,caption:s.caption,kind:s.kind,image:null,gradient:s.gradient,createdAt:created.toISOString(),expiresAt:new Date(created.getTime()+2*3600*1000).toISOString(),claudeStatus:s.claudeStatus,views:0,demo:true}); }
   save();
 }
 load(); seed();
@@ -34,7 +34,7 @@ function feed(){
   for(const s of live){ (by[s.handle]=by[s.handle]||[]).push(s); }
   return Object.keys(by).map(handle=>{ const arr=by[handle].slice().sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt)); return {handle,avatarColor:colorFor(handle),latestAt:arr[0].createdAt,stories:arr.map(publicStory)}; }).sort((a,b)=>new Date(b.latestAt)-new Date(a.latestAt));
 }
-function readBody(req){ return new Promise((resolve)=>{ let b=''; req.on('data',c=>{ b+=c; if(b.length>5000000){ req.destroy(); } }); req.on('end',()=>{ try{ resolve(b?JSON.parse(b):{}); }catch(_){ resolve(null); } }); req.on('error',()=>resolve(null)); }); }
+function readBody(req){ return new Promise((resolve)=>{ let b=''; req.on('data',c=>{ b+=c; if(b.length>12000000){ req.destroy(); } }); req.on('end',()=>{ try{ resolve(b?JSON.parse(b):{}); }catch(_){ resolve(null); } }); req.on('error',()=>resolve(null)); }); }
 function send(res,code,obj){ const body=typeof obj==='string'?obj:JSON.stringify(obj); res.writeHead(code,{'Content-Type': typeof obj==='string'?'text/plain':'application/json','Access-Control-Allow-Origin':'*','Access-Control-Allow-Methods':'GET,POST,DELETE,OPTIONS','Access-Control-Allow-Headers':'Content-Type'}); res.end(body); }
 const server=http.createServer(async (req,res)=>{
   const url=(req.url||'/').split('?')[0];
@@ -46,10 +46,10 @@ const server=http.createServer(async (req,res)=>{
     const {handle,caption,kind,image,claudeStatus}=body;
     if(!handle||!HANDLE_RE.test(handle)){ send(res,400,{error:'invalid handle'}); return; }
     if(caption!=null && String(caption).length>200){ send(res,400,{error:'caption too long'}); return; }
-    if(image!=null && image!=='' && (typeof image!=='string'||!image.startsWith('data:image/')||image.length>2500000)){ send(res,400,{error:'invalid image'}); return; }
+    if(image!=null && image!==''){ if(typeof image!=='string'||!image.startsWith('data:image/')){ send(res,400,{error:'invalid image'}); return; } if(image.length>8000000){ send(res,400,{error:'image too large — the app compresses photos automatically; try a smaller image'}); return; } }
     const k=['screenshot','selfie','photo'].includes(kind)?kind:'photo';
     const now=new Date();
-    const story={id:crypto.randomBytes(8).toString('hex'),handle,caption:String(caption||''),kind:k,image:image||null,gradient:null,createdAt:now.toISOString(),expiresAt:new Date(now.getTime()+24*3600*1000).toISOString(),claudeStatus:claudeStatus||null,views:0,demo:false};
+    const story={id:crypto.randomBytes(8).toString('hex'),handle,caption:String(caption||''),kind:k,image:image||null,gradient:null,createdAt:now.toISOString(),expiresAt:new Date(now.getTime()+2*3600*1000).toISOString(),claudeStatus:claudeStatus||null,views:0,demo:false};
     stories.push(story); save(); send(res,201,publicStory(story)); return;
   }
   const viewMatch=url.match(/^\/api\/stories\/([^/]+)\/view$/);
@@ -59,5 +59,5 @@ const server=http.createServer(async (req,res)=>{
   if(req.method==='GET'&&(url==='/'||url==='/index.html')){ fs.readFile(CLIENT_HTML,(err,data)=>{ if(err){ send(res,500,'client not found'); return; } res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store'}); res.end(data); }); return; }
   send(res,404,{error:'not found'});
 });
-if(require.main===module){ server.listen(PORT,'0.0.0.0',()=>console.log('devsnap server listening on http://0.0.0.0:'+PORT)); }
+if(require.main===module){ server.listen(PORT,'0.0.0.0',()=>console.log('claudechat server listening on http://0.0.0.0:'+PORT)); }
 module.exports={server};

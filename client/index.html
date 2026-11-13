@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>DevSnap</title>
+<title>ClaudeChat</title>
 <style>
 *{box-sizing:border-box}body{margin:0;background:#0b0b0f;color:#fff;font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
 .wrap{max-width:420px;margin:0 auto;padding:42px 14px 40px;min-height:100vh}
@@ -50,7 +50,7 @@ h2{font-size:15px;margin:22px 0 4px}
 .tapzone{position:absolute;top:0;bottom:0;width:33%;z-index:2}.tapzone.l{left:0}.tapzone.r{right:0}
 </style></head><body>
 <div class="wrap">
-<header><h1>👻 DevSnap</h1><span id="claudePill" class="pill" style="display:none"></span></header>
+<header><h1>💬 ClaudeChat</h1><span id="claudePill" class="pill" style="display:none"></span></header>
 <div class="handlebar"><span>@</span><input id="handleInput" placeholder="your-handle" maxlength="24"><button id="saveHandle" class="ghost">Save</button></div>
 <div id="rings" class="rings"></div>
 <div class="warn">⚠️ Check your screenshot for secrets — .env, tokens, keys — before posting.</div>
@@ -72,7 +72,7 @@ h2{font-size:15px;margin:22px 0 4px}
 <script>
 'use strict';
 var handle=null, feedData=[], kind='screenshot', imageData=null, viewed={};
-try{ viewed=JSON.parse(localStorage.getItem('devsnap-viewed')||'{}'); }catch(e){}
+try{ viewed=JSON.parse(localStorage.getItem('claudechat-viewed')||localStorage.getItem('devsnap-viewed')||'{}'); }catch(e){}
 function esc(s){ var d=document.createElement('div'); d.textContent=s==null?'':String(s); return d; }
 function txt(parent,tag,cls,text){ var el=document.createElement(tag); if(cls) el.className=cls; el.textContent=text==null?'':String(text); parent.appendChild(el); return el; }
 function timeAgo(iso){ var s=(Date.now()-new Date(iso).getTime())/1000; if(s<60) return 'now'; if(s<3600) return Math.floor(s/60)+'m'; if(s<86400) return Math.floor(s/3600)+'h'; return Math.floor(s/86400)+'d'; }
@@ -82,15 +82,15 @@ function kindEmoji(k){ return k==='selfie'?'🤳':(k==='screenshot'?'💻':'📸
 function loadIdentity(){
   fetch('/profile').then(function(r){ return r.ok?r.json():null; }).then(function(p){
     if(p&&p.handle){ handle=p.handle; }
-    else { handle=localStorage.getItem('devsnap-handle'); }
+    else { handle=localStorage.getItem('claudechat-handle')||localStorage.getItem('devsnap-handle'); }
     if(handle) document.getElementById('handleInput').value=handle;
     loadFeed();
-  }).catch(function(){ handle=localStorage.getItem('devsnap-handle'); if(handle) document.getElementById('handleInput').value=handle; loadFeed(); });
+  }).catch(function(){ handle=localStorage.getItem('claudechat-handle')||localStorage.getItem('devsnap-handle'); if(handle) document.getElementById('handleInput').value=handle; loadFeed(); });
 }
 document.getElementById('saveHandle').addEventListener('click',function(){
   var v=document.getElementById('handleInput').value.trim();
   if(!/^[a-zA-Z0-9_.-]{1,24}$/.test(v)){ alert('Handle: 1-24 chars, letters/numbers/_ . - only'); return; }
-  handle=v; localStorage.setItem('devsnap-handle',v);
+  handle=v; localStorage.setItem('claudechat-handle',v);
   fetch('/profile',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({handle:v})}).catch(function(){});
   loadFeed();
 });
@@ -132,16 +132,26 @@ drop.addEventListener('dragleave',function(){ drop.classList.remove('over'); });
 drop.addEventListener('drop',function(e){ e.preventDefault(); drop.classList.remove('over'); if(e.dataTransfer.files[0]) readFile(e.dataTransfer.files[0]); });
 file.addEventListener('change',function(){ if(file.files[0]) readFile(file.files[0]); });
 document.addEventListener('paste',function(e){ var items=(e.clipboardData||{}).items||[]; for(var i=0;i<items.length;i++){ if(items[i].type.indexOf('image')===0){ readFile(items[i].getAsFile()); break; } } });
-function readFile(f){ var r=new FileReader(); r.onload=function(){ imageData=r.result; drop.innerHTML=''; var im=document.createElement('img'); im.src=imageData; drop.appendChild(im); }; r.readAsDataURL(f); }
+function showPreview(){ var olds=drop.querySelectorAll('img'); for(var i=0;i<olds.length;i++) olds[i].remove(); var im=document.createElement('img'); im.src=imageData; drop.appendChild(im); }
+function readRawFallback(f){ var r=new FileReader(); r.onload=function(){ imageData=r.result; showPreview(); }; r.readAsDataURL(f); }
+function readFile(f){ // Downscale + JPEG-compress before upload: full-res phone photos are several MB and were rejected uncompressed.
+  if(!f) return;
+  var url; try{ url=URL.createObjectURL(f); }catch(e){ readRawFallback(f); return; }
+  var img=new Image();
+  img.onload=function(){ try{ var MAX=1600; var w=img.naturalWidth||1600, h=img.naturalHeight||1200; var sc=Math.min(1,MAX/Math.max(w,h)); var cv=document.createElement('canvas'); cv.width=Math.max(1,Math.round(w*sc)); cv.height=Math.max(1,Math.round(h*sc)); cv.getContext('2d').drawImage(img,0,0,cv.width,cv.height); imageData=cv.toDataURL('image/jpeg',0.85); URL.revokeObjectURL(url); showPreview(); }catch(e){ URL.revokeObjectURL(url); readRawFallback(f); } };
+  img.onerror=function(){ URL.revokeObjectURL(url); readRawFallback(f); };
+  img.src=url;
+}
 document.getElementById('kindSeg').addEventListener('click',function(e){ if(e.target.dataset&&e.target.dataset.k){ kind=e.target.dataset.k; var bs=this.querySelectorAll('button'); for(var i=0;i<bs.length;i++) bs[i].classList.toggle('on',bs[i]===e.target); } });
 document.getElementById('caption').addEventListener('input',function(){ document.getElementById('ccount').textContent=this.value.length; });
 document.getElementById('clearBtn').addEventListener('click',function(){ imageData=null; document.getElementById('caption').value=''; location.reload(); });
 var claudeStatusCache=null;
 fetch('/status').then(function(r){ return r.ok?r.json():null; }).then(function(s){ if(s) claudeStatusCache=s.agent; }).catch(function(){});
 document.getElementById('postBtn').addEventListener('click',function(){
-  if(!handle){ alert('Set your handle first'); return; }
+  if(!handle){ alert('Set your handle first (the @ field at the top), then post.'); return; }
+  var btn=this; if(btn.disabled) return; btn.disabled=true; var oldLabel=btn.textContent; btn.textContent='Posting…';
   var cap=document.getElementById('caption').value.slice(0,200);
-  fetch('/api/stories',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({handle:handle,caption:cap,kind:kind,image:imageData,claudeStatus:claudeStatusCache})}).then(function(r){ return r.json().then(function(j){ if(!r.ok) throw new Error(j.error||'failed'); return j; }); }).then(function(){ imageData=null; loadFeed(); setTimeout(function(){ var gi=feedData.findIndex(function(g){return g.handle===handle;}); },300); loadFeed(); }).catch(function(e){ alert('Post failed: '+e.message); });
+  fetch('/api/stories',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({handle:handle,caption:cap,kind:kind,image:imageData,claudeStatus:claudeStatusCache})}).then(function(r){ return r.text().then(function(t){ var j=null; try{ j=JSON.parse(t); }catch(e){} if(!r.ok) throw new Error((j&&j.error)||('HTTP '+r.status)); return j; }); }).then(function(){ imageData=null; document.getElementById('caption').value=''; document.getElementById('ccount').textContent='0'; var olds=drop.querySelectorAll('img'); for(var i=0;i<olds.length;i++) olds[i].remove(); loadFeed(); }).catch(function(e){ alert('Post failed: '+e.message); }).then(function(){ btn.disabled=false; btn.textContent=oldLabel; });
 });
 // viewer
 var vGroup=null, vIdx=0, vTimer=null, liked={};
@@ -159,7 +169,7 @@ function showStory(){
   document.getElementById('heart').textContent=liked[s.id]?'❤️':'🤍'; document.getElementById('heart').classList.toggle('liked',!!liked[s.id]);
   var bars=document.getElementById('bars'); bars.innerHTML='';
   vGroup.stories.forEach(function(_,i){ var b=document.createElement('div'); b.className='bar'; var fill=document.createElement('i'); fill.style.width=i<vIdx?'100%':(i===vIdx?'0%':'0%'); b.appendChild(fill); bars.appendChild(b); if(i===vIdx){ fill.style.transition='width 5s linear'; requestAnimationFrame(function(){ fill.style.width='100%'; }); } });
-  viewed[s.id]=true; try{ localStorage.setItem('devsnap-viewed',JSON.stringify(viewed)); }catch(e){}
+  viewed[s.id]=true; try{ localStorage.setItem('claudechat-viewed',JSON.stringify(viewed)); }catch(e){}
   if(handle) fetch('/api/stories/'+s.id+'/view',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({handle:handle})}).catch(function(){});
   if(vTimer) clearTimeout(vTimer); vTimer=setTimeout(function(){ vIdx++; showStory(); },5000);
   renderRingsOnly();
