@@ -1,5 +1,5 @@
 'use strict';
-/* DevSnap tests — plain Node, zero deps. Run: node tests/claudechat.test.js */
+/* ClaudeChat tests — plain Node, zero deps. Run: node tests/claudechat.test.js */
 const fs=require('fs'); const os=require('os'); const path=require('path'); const http=require('http'); const {spawn}=require('child_process');
 const ROOT=path.join(__dirname,'..'); const PLUGIN=path.join(ROOT,'plugins','claudechat');
 const results=[]; function check(name,ok,detail){ results.push({name,ok}); console.log(`${ok?'PASS':'FAIL'}  ${name}${detail?'  '+detail:''}`); }
@@ -10,22 +10,34 @@ async function waitHealth(port){ for(let i=0;i<50;i++){ try{ const x=await req(p
   // manifests
   let mp,pj,hj;
   try{ mp=JSON.parse(fs.readFileSync(path.join(ROOT,'.claude-plugin','marketplace.json'),'utf8')); pj=JSON.parse(fs.readFileSync(path.join(PLUGIN,'.claude-plugin','plugin.json'),'utf8')); hj=JSON.parse(fs.readFileSync(path.join(PLUGIN,'hooks','hooks.json'),'utf8')); check('manifests parse',true); }catch(e){ check('manifests parse',false,e.message); throw e; }
-  check('marketplace is claudechat with one claudechat plugin v0.2.0', mp.name==='claudechat'&&mp.plugins.length===1&&mp.plugins[0].name==='claudechat'&&mp.plugins[0].source==='./plugins/claudechat'&&mp.plugins[0].version==='0.2.0');
-  check('plugin.json is claudechat v0.2.0', pj.name==='claudechat'&&pj.version==='0.2.0');
+  check('marketplace is claudechat with one claudechat plugin v0.3.0', mp.name==='claudechat'&&mp.plugins.length===1&&mp.plugins[0].name==='claudechat'&&mp.plugins[0].source==='./plugins/claudechat'&&mp.plugins[0].version==='0.3.0');
+  check('plugin.json is claudechat v0.3.0', pj.name==='claudechat'&&pj.version==='0.3.0');
   const EVENTS=['SessionStart','UserPromptSubmit','Notification','PermissionRequest','Stop','SessionEnd'];
   check('hooks cover 6 events -> hook.js', EVENTS.every(ev=>{ const g=hj.hooks&&hj.hooks[ev]; return Array.isArray(g)&&g.some(x=>(x.hooks||[]).some(h=>h.command.includes('scripts/hook.js')&&h.command.includes(ev))); }));
   const hooksRaw=fs.readFileSync(path.join(PLUGIN,'hooks','hooks.json'),'utf8');
   check('hooks have no autostart', !hooksRaw.includes('autostart'));
   check('client copies identical', fs.readFileSync(path.join(ROOT,'client','index.html'),'utf8')===fs.readFileSync(path.join(PLUGIN,'client','index.html'),'utf8'));
   const bridgeRaw=fs.readFileSync(path.join(PLUGIN,'scripts','bridge.js'),'utf8');
-  check('bridge defaults to live shared server', bridgeRaw.includes("DEFAULT_SERVER='https://devsnap-lozv.onrender.com'")&&bridgeRaw.includes("==='local'"));
-  // bridge /mode: default (shared) and CLAUDECHAT_SERVER=local (local store)
+  const hookRaw=fs.readFileSync(path.join(PLUGIN,'scripts','hook.js'),'utf8');
+  check('bridge is online-only (no local store, no proxy)', !bridgeRaw.includes('stories.json')&&!bridgeRaw.includes('localOnly')&&bridgeRaw.includes("DEFAULT_SERVER = 'https://devsnap-lozv.onrender.com'"));
+  check('hook opens the online app', hookRaw.includes('devsnap-lozv.onrender.com')&&!hookRaw.includes("'http://localhost:'+port"));
+  // bridge: status-only helper for the online app
   const BPORT=37800+(process.pid%150); const btmp=fs.mkdtempSync(path.join(os.tmpdir(),'claudechat-bridge-'));
-  const mkEnv=(extra)=>({...process.env,CLAUDE_PLUGIN_DATA:btmp,CLAUDECHAT_PORT:String(BPORT),...extra});
-  const bDef=spawn(process.execPath,[path.join(PLUGIN,'scripts','bridge.js')],{env:mkEnv({CLAUDECHAT_SERVER:''}),stdio:'ignore'});
-  try{ const up=await waitHealth(BPORT); const mode=await req(BPORT,'GET','/mode'); check('bridge default mode is shared live server', up&&mode.json&&mode.json.mode==='shared'&&mode.json.server==='https://devsnap-lozv.onrender.com'); } finally { bDef.kill('SIGTERM'); await sleep(300); }
-  const bLoc=spawn(process.execPath,[path.join(PLUGIN,'scripts','bridge.js')],{env:mkEnv({CLAUDECHAT_SERVER:'local'}),stdio:'ignore'});
-  try{ const up=await waitHealth(BPORT); const mode=await req(BPORT,'GET','/mode'); const feed=await req(BPORT,'GET','/api/feed'); check('bridge CLAUDECHAT_SERVER=local gives local store', up&&mode.json&&mode.json.mode==='local'&&mode.json.server===null&&Array.isArray(feed.json)&&feed.json.length===3); } finally { bLoc.kill('SIGTERM'); await sleep(300); try{ fs.rmSync(btmp,{recursive:true,force:true}); }catch(_){} }
+  fs.writeFileSync(path.join(btmp,'state.json'), JSON.stringify({agent:'busy',event:'UserPromptSubmit',updatedAt:new Date().toISOString()}));
+  const bridge=spawn(process.execPath,[path.join(PLUGIN,'scripts','bridge.js')],{env:{...process.env,CLAUDE_PLUGIN_DATA:btmp,CLAUDECHAT_PORT:String(BPORT),CLAUDECHAT_SERVER:''},stdio:'ignore'});
+  try{
+    const up=await waitHealth(BPORT);
+    const mode=await req(BPORT,'GET','/mode');
+    check('bridge mode is online with live server', up&&mode.json&&mode.json.mode==='online'&&mode.json.server==='https://devsnap-lozv.onrender.com');
+    const st=await req(BPORT,'GET','/status');
+    check('bridge /status reports hook state', st.status===200&&st.json&&st.json.agent==='busy');
+    const root=await req(BPORT,'GET','/');
+    check('bridge serves no pages (404)', root.status===404);
+    const api=await req(BPORT,'GET','/api/feed');
+    check('bridge has no stories API (404)', api.status===404);
+    const pre=await req(BPORT,'OPTIONS','/status');
+    check('bridge answers CORS/PNA preflight', pre.status===204);
+  } finally { bridge.kill('SIGTERM'); await sleep(300); try{ fs.rmSync(btmp,{recursive:true,force:true}); }catch(_){} }
   // server e2e on ephemeral port — use fixed high port derived from pid
   const PORT=37400+(process.pid%400);
   const tmpStore=path.join(ROOT,'server','stories.json'); const backup=fs.existsSync(tmpStore)?fs.readFileSync(tmpStore):null;

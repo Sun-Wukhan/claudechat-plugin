@@ -5,7 +5,9 @@
  * Invoked as: node hook.js <EventName>
  * Records agent status in <CLAUDE_PLUGIN_DATA or ~/.claudechat>/state.json
  * { agent, event, updatedAt }. NEVER reads stdin.
- * `open` invocation: ensure bridge, open browser unless CLAUDECHAT_NO_OPEN.
+ * `open` invocation: ensure the status bridge, then open the ONLINE app
+ * (CLAUDECHAT_SERVER or the default live server) in the browser, unless
+ * CLAUDECHAT_NO_OPEN. ClaudeChat is online only — nothing is served locally.
  * Lifecycle events NEVER open a window (Navid's standing rule, Nov 10 2026).
  * Env: CLAUDE_PLUGIN_DATA, CLAUDECHAT_PORT (default 37180), CLAUDECHAT_NO_OPEN
  * (legacy DEVSNAP_PORT / DEVSNAP_NO_OPEN honoured as fallbacks)
@@ -28,7 +30,8 @@ async function ensureBridge(){
   for(let i=0;i<30;i++){ await sleep(100); const p=readBridgePort(); if(await health(p,300)) return p; if(await health(DEFAULT_PORT,300)) return DEFAULT_PORT; }
   return readBridgePort();
 }
-function openApp(port){ if(process.env.CLAUDECHAT_NO_OPEN || process.env.DEVSNAP_NO_OPEN) return; const url='http://localhost:'+port+'/'; try{ let child; if(process.platform==='darwin') child=spawn('open',[url],{detached:true,stdio:'ignore'}); else if(process.platform==='win32') child=spawn('cmd',['/c','start','',url],{detached:true,stdio:'ignore'}); else child=spawn('xdg-open',[url],{detached:true,stdio:'ignore'}); child.on('error',()=>{}); child.unref(); }catch(_){} }
+function appUrl(){ const v=(process.env.CLAUDECHAT_SERVER||process.env.DEVSNAP_SERVER||'').trim(); return v || 'https://devsnap-lozv.onrender.com'; }
+function openApp(){ if(process.env.CLAUDECHAT_NO_OPEN || process.env.DEVSNAP_NO_OPEN) return; const url=appUrl(); try{ let child; if(process.platform==='darwin') child=spawn('open',[url],{detached:true,stdio:'ignore'}); else if(process.platform==='win32') child=spawn('cmd',['/c','start','',url],{detached:true,stdio:'ignore'}); else child=spawn('xdg-open',[url],{detached:true,stdio:'ignore'}); child.on('error',()=>{}); child.unref(); }catch(_){} }
 const TRANSITIONS={'session-start':'idle',sessionstart:'idle','user-prompt-submit':'busy',userpromptsubmit:'busy',notification:'attention','permission-request':'attention',permissionrequest:'attention',stop:'done','session-end':'idle',sessionend:'idle'};
-async function main(){ const rawEvent=String(process.argv[2]||'').trim(); const key=rawEvent.toLowerCase(); if(key==='open'){ const port=await ensureBridge(); openApp(port); return; } const agent=TRANSITIONS[key]; if(agent) writeState(agent, rawEvent); }
+async function main(){ const rawEvent=String(process.argv[2]||'').trim(); const key=rawEvent.toLowerCase(); if(key==='open'){ await ensureBridge(); openApp(); return; } const agent=TRANSITIONS[key]; if(agent) writeState(agent, rawEvent); }
 main().catch(()=>{}).finally(()=>process.exit(0));

@@ -19,7 +19,7 @@ Then open it:
 /claudechat
 ```
 
-`/claudechat` starts the local bridge (127.0.0.1 only) if needed and opens ClaudeChat in your default browser. Lifecycle hooks never open a window on their own — opening only happens on `/claudechat`.
+`/claudechat` opens the **online app** in your default browser (and starts the tiny local status bridge if needed — see below). Lifecycle hooks never open a window on their own — opening only happens on `/claudechat`.
 
 ## Usage
 
@@ -31,27 +31,23 @@ Then open it:
 
 **The warning strip in the composer is real: check your screenshot for secrets — `.env` files, tokens, keys, private URLs — before posting.**
 
-## Local vs shared mode
+## Online only
 
-**By default the bridge connects to the public shared server** — a fresh install lands straight in the shared feed, no setup needed:
+ClaudeChat has **no local mode**. The app and every story live on the shared server:
 
-- Shared server: https://devsnap-lozv.onrender.com (the URL keeps the old DevSnap name; renaming it would break existing installs). Also usable directly in a browser — the server serves the same UI.
-- Everyone whose plugin points at the same server sees the same feed of stories from other devs.
+- Default server: https://devsnap-lozv.onrender.com (the URL keeps the old DevSnap name; renaming it would break existing installs). Open it in any browser — the server serves the full app.
+- Everyone pointing at the same server sees the same feed of stories from other devs.
 - Free-tier caveat: the server sleeps when idle, so the first request after a quiet period can take ~50s to wake it. If ClaudeChat looks empty or slow on first open, wait a moment and refresh.
 
-To use a **different** shared server (your own — see below):
+The plugin's local bridge is **not** a server for the app: it stores nothing and serves no pages. Its only job is reporting your Claude Code status (busy / attention / done) from `127.0.0.1:37180`, so when you open the hosted app on a machine running the plugin, the page can show the Claude-status ribbon and badge. If the bridge isn't running — or you just open the site in a browser — the app works exactly the same, minus the ribbon.
+
+To run against a **different** server (your own — see below), set:
 
 ```bash
 export CLAUDECHAT_SERVER=https://your-server.example.com
 ```
 
-To opt out of sharing entirely and run **local-only** (stories live in `<CLAUDE_PLUGIN_DATA or ~/.claudechat>/stories.json`, visible only on your own machine):
-
-```bash
-export CLAUDECHAT_SERVER=local
-```
-
-Check which mode a running bridge is in at `GET /mode` on the bridge (e.g. http://127.0.0.1:37180/mode).
+Check a running bridge at `GET /mode` (e.g. http://127.0.0.1:37180/mode) — it reports `{mode: "online", server}`.
 
 ## Deploy your own shared server (Render)
 
@@ -66,9 +62,9 @@ Check which mode a running bridge is in at `GET /mode` on the bridge (e.g. http:
 
 | Variable | Used by | Default | Meaning |
 |---|---|---|---|
-| `CLAUDECHAT_PORT` | bridge / hook | `37180` | Preferred local bridge port (tries +1…+5 if busy) |
+| `CLAUDECHAT_PORT` | bridge / hook | `37180` | Preferred status-bridge port (tries +1…+5 if busy) |
 | `CLAUDECHAT_NO_OPEN` | hook | unset | If set, `open` starts the bridge but never opens a browser |
-| `CLAUDECHAT_SERVER` | bridge | `https://devsnap-lozv.onrender.com` | Shared server URL; `local` (or `off`) = local-only mode, any other URL = that server |
+| `CLAUDECHAT_SERVER` | bridge / hook | `https://devsnap-lozv.onrender.com` | The online app URL `/claudechat` opens and the bridge reports |
 | `PORT` | shared server | `37181` | Port the shared server binds |
 
 Legacy `DEVSNAP_PORT` / `DEVSNAP_NO_OPEN` / `DEVSNAP_SERVER` are still honoured as fallbacks.
@@ -78,14 +74,14 @@ Legacy `DEVSNAP_PORT` / `DEVSNAP_NO_OPEN` / `DEVSNAP_SERVER` are still honoured 
 - Stories auto-expire 2 hours after posting.
 - Screenshots can leak secrets. Review every image before posting.
 - **MVP has no authentication.** Handles are self-claimed — anyone who can reach a shared server can post as any handle and view everything. Do not run a public server for strangers without adding auth first.
-- The local bridge binds `127.0.0.1` only. Hook scripts never read Claude's stdin payload and store only `{agent, event, updatedAt}` in `state.json`.
+- The status bridge binds `127.0.0.1` only and exposes nothing but the Claude status enum (idle/busy/attention/done). Hook scripts never read Claude's stdin payload and store only `{agent, event, updatedAt}` in `state.json`.
 
 ## Develop / test
 
 ```bash
 node tests/claudechat.test.js
 node server/server.js          # shared server on :37181
-node plugins/claudechat/scripts/bridge.js   # local bridge on :37180
+node plugins/claudechat/scripts/bridge.js   # status bridge on :37180
 ```
 
 Zero npm dependencies everywhere; Node >= 18.

@@ -146,7 +146,9 @@ document.getElementById('kindSeg').addEventListener('click',function(e){ if(e.ta
 document.getElementById('caption').addEventListener('input',function(){ document.getElementById('ccount').textContent=this.value.length; });
 document.getElementById('clearBtn').addEventListener('click',function(){ imageData=null; document.getElementById('caption').value=''; location.reload(); });
 var claudeStatusCache=null;
-fetch('/status').then(function(r){ return r.ok?r.json():null; }).then(function(s){ if(s) claudeStatusCache=s.agent; }).catch(function(){});
+var ccBridgeBase=null;
+function ccStatus(){ if(ccBridgeBase){ return fetch(ccBridgeBase+'/status',{cache:'no-store'}).then(function(r){ return r.ok?r.json():null; }).then(function(s){ return s?s.agent:null; }).catch(function(){ ccBridgeBase=null; return null; }); } var ports=[37180,37181,37182,37183,37184,37185]; var chain=Promise.resolve(null); ports.forEach(function(port){ chain=chain.then(function(a){ if(a) return a; return fetch('http://127.0.0.1:'+port+'/status',{cache:'no-store'}).then(function(r){ return r.ok?r.json():null; }).then(function(s){ if(s&&s.agent){ ccBridgeBase='http://127.0.0.1:'+port; return s.agent; } return null; }).catch(function(){ return null; }); }); }); return chain; }
+ccStatus().then(function(a){ if(a) claudeStatusCache=a; });
 document.getElementById('postBtn').addEventListener('click',function(){
   if(!handle){ alert('Set your handle first (the @ field at the top), then post.'); return; }
   var btn=this; if(btn.disabled) return; btn.disabled=true; var oldLabel=btn.textContent; btn.textContent='Posting…';
@@ -181,7 +183,24 @@ document.getElementById('tapR').addEventListener('click',function(){ vIdx++; sho
 document.getElementById('heart').addEventListener('click',function(){ if(!vGroup) return; var s=vGroup.stories[vIdx]; liked[s.id]=!liked[s.id]; this.textContent=liked[s.id]?'❤️':'🤍'; this.classList.toggle('liked',!!liked[s.id]); });
 document.addEventListener('keydown',function(e){ if(e.key==='Escape') closeViewer(); });
 // status pill
-function pollStatus(){ fetch('/status',{cache:'no-store'}).then(function(r){ if(!r.ok) throw 0; return r.json(); }).then(function(s){ var p=document.getElementById('claudePill'); p.style.display=''; p.className='pill '+(s.agent||''); p.textContent='Claude: '+(s.agent||'idle'); claudeStatusCache=s.agent; }).catch(function(){ document.getElementById('claudePill').style.display='none'; }); }
+function pollStatus(){ ccStatus().then(function(a){ var p=document.getElementById('claudePill'); if(!a){ p.style.display='none'; return; } p.style.display=''; p.className='pill '+a; p.textContent='Claude: '+a; claudeStatusCache=a; }); }
 setInterval(pollStatus,1000); pollStatus();
 loadIdentity(); setInterval(loadFeed,15000);
-</script></body></html>
+</script>
+<script>
+/* Claude-status ribbon: ClaudeChat is online only, so this page comes from
+   the shared server. If the plugin's status bridge runs on this machine,
+   ccStatus() finds it and the ribbon shows Claude's live status. If no
+   bridge answers, no ribbon appears and nothing else changes. */
+(function(){
+  var BASE_TITLE=document.title;
+  var bar=document.createElement("div"); bar.id="claudechat-ribbon";
+  bar.setAttribute("style","position:fixed;top:0;left:0;right:0;height:28px;z-index:2147483000;pointer-events:none;display:none;align-items:center;justify-content:center;font:600 13px/1 system-ui,sans-serif;color:#f5f5f5;background:#4b5563;transition:transform .35s ease,background .25s ease;");
+  var style=document.createElement("style"); style.textContent="@keyframes claudechat-pulse{0%,100%{background:#b91c1c}50%{background:#ef4444}}"; document.head.appendChild(style);
+  function mount(){ if(document.body) document.body.appendChild(bar); else setTimeout(mount,50); } mount();
+  var current=null,doneSince=0;
+  function render(agent){ var now=Date.now(); if(agent!==current){current=agent; doneSince=(agent==="done")?now:0;} bar.style.display="flex"; bar.style.animation="none"; if(agent==="attention"){bar.style.background="#b91c1c"; bar.style.animation="claudechat-pulse 1s ease-in-out infinite"; bar.textContent="\u26A0\uFE0F Claude needs you \u2014 check your terminal"; bar.style.transform="translateY(0)"; document.title="\u26A0\uFE0F Claude needs you \u2014 "+BASE_TITLE;} else if(agent==="busy"){bar.style.background="#1d4ed8"; bar.textContent="Claude is working\u2026"; bar.style.transform="translateY(0)"; document.title=BASE_TITLE;} else if(agent==="done"){bar.style.background="#15803d"; bar.textContent="\u2714 Claude is done"; bar.style.transform=(now-doneSince>6000)?"translateY(-100%)":"translateY(0)"; document.title=BASE_TITLE;} else {bar.style.background="#4b5563"; bar.textContent="\uD83D\uDCAC ClaudeChat \u00B7 Claude is idle"; bar.style.transform="translateY(0)"; document.title=BASE_TITLE;} }
+  setInterval(function(){ if(typeof ccStatus==="function") ccStatus().then(function(a){ if(a) render(a); }); },1000);
+})();
+</script>
+</body></html>

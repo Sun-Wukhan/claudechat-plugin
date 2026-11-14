@@ -1,1 +1,1 @@
-{"name":"claudechat","owner":{"name":"Navid Khan"},"plugins":[{"description":"ClaudeChat — stories for devs, inside Claude Code. Post screenshots and selfies, view other devs' stories while Claude works.","name":"claudechat","source":"./plugins/claudechat","version":"0.2.0"}]}
+{"name":"claudechat","owner":{"name":"Navid Khan"},"plugins":[{"description":"ClaudeChat — stories for devs, inside Claude Code. Post screenshots and selfies, view other devs' stories while Claude works.","name":"claudechat","source":"./plugins/claudechat","version":"0.3.0"}]}
